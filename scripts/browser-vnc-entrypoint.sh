@@ -84,11 +84,16 @@ if [[ "${ENABLE_NOVNC}" == "1" && "${HEADLESS}" != "1" ]]; then
   # Configure VNC password if provided
   if [[ -n "${VNC_PASSWORD}" ]]; then
     echo "🔒 Configuring VNC password..."
+    # Remove any existing password file to ensure fresh config
+    rm -f ~/.vnc/passwd
     mkdir -p ~/.vnc
     echo "${VNC_PASSWORD}" | x11vnc -storepasswd /dev/stdin ~/.vnc/passwd
+    echo "✅ VNC password configured"
     x11vnc -display :1 -rfbport "${VNC_PORT}" -shared -forever -rfbauth ~/.vnc/passwd &
+    echo "   VNC server started with password authentication on port ${VNC_PORT}"
   else
-    echo "⚠️  No VNC password set - running without authentication"
+    echo "⚠️  WARNING: No VNC_PASSWORD environment variable set!"
+    echo "   Starting VNC without password authentication (insecure)"
     x11vnc -display :1 -rfbport "${VNC_PORT}" -shared -forever -nopw &
   fi
   
