@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1
+# Custom Browser-VNC image based on official openclaw-sandbox-browser
+# Adds VNC password support (official image uses -nopw)
+
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install all required packages (same as official)
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    chromium \
+    curl \
+    fonts-liberation \
+    fonts-noto-color-emoji \
+    git \
+    jq \
+    novnc \
+    python3 \
+    socat \
+    websockify \
+    x11vnc \
+    xvfb \
+  && rm -rf /var/lib/apt/lists/*
+
+# Copy our custom entrypoint with VNC password support
+COPY scripts/browser-vnc-entrypoint.sh /usr/local/bin/browser-vnc-entrypoint
+RUN chmod +x /usr/local/bin/browser-vnc-entrypoint
+
+# Create sandbox user (same as official)
+RUN useradd --create-home --shell /bin/bash sandbox
+USER sandbox
+WORKDIR /home/sandbox
+
+# Expose CDP, VNC, and noVNC ports
+EXPOSE 9222 5900 6080
+
+CMD ["browser-vnc-entrypoint"]
