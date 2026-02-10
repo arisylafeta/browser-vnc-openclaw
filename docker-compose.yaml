@@ -102,7 +102,6 @@ services:
     volumes:
       - browser-data:/home/sandbox/.config/chromium
       - browser-downloads:/home/sandbox/Downloads
-      - browser-cache:/home/sandbox/.browser-home
     
     healthcheck:
       test: ["CMD", "curl", "-fsS", "--max-time", "2", "http://localhost:6080/vnc.html"]
@@ -116,4 +115,3 @@ volumes:
   openclaw-workspace:
   browser-data:
   browser-downloads:
-  browser-cache:

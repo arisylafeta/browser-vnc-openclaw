@@ -2,7 +2,7 @@
 set -euo pipefail
 
 export DISPLAY=:1
-export HOME=/home/sandbox/.browser-home
+export HOME=/tmp/openclaw-home
 export XDG_CONFIG_HOME="${HOME}/.config"
 export XDG_CACHE_HOME="${HOME}/.cache"
 
