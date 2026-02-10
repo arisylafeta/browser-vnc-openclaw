@@ -7,6 +7,8 @@ services:
       context: .
       dockerfile: Dockerfile.openclaw
     restart: on-failure:5
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
     env_file:
       - .env
     environment:
@@ -87,7 +89,10 @@ services:
       context: .
       dockerfile: Dockerfile.browser-vnc
     restart: unless-stopped
-    # NOTE: Ports exposed via Coolify API, not docker-compose ports
+    ports:
+      - "${NOVNC_PORT:-6080}:6080"
+      - "${VNC_PORT:-5900}:5900"
+      - "${CDP_PORT:-9222}:9222"
     environment:
       # Port configuration
       CDP_PORT: 9222
