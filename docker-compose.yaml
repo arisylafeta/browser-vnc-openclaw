@@ -8,7 +8,7 @@ services:
       dockerfile: Dockerfile.openclaw
     restart: on-failure:5
     ports:
-      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:${OPENCLAW_GATEWAY_PORT:-18789}"
     env_file:
       - .env
     environment:
