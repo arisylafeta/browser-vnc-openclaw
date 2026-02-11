@@ -59,7 +59,6 @@ CHROME_ARGS+=(
   "--metrics-recording-only"
   "--no-sandbox"
   "--disable-setuid-sandbox"
-  "--disable-gpu-sandbox"
 )
 
 echo "🌐 Starting Chromium..."
@@ -95,7 +94,8 @@ if [[ "${ENABLE_NOVNC}" == "1" && "${HEADLESS}" != "1" ]]; then
     # Remove any existing password file to ensure fresh config
     rm -f ~/.vnc/passwd
     mkdir -p ~/.vnc
-    echo "${VNC_PASSWORD}" | x11vnc -storepasswd /dev/stdin ~/.vnc/passwd
+    # Use correct x11vnc -storepasswd syntax
+    x11vnc -storepasswd "${VNC_PASSWORD}" ~/.vnc/passwd
     if [ -f ~/.vnc/passwd ]; then
       echo "=== VNC PASSWORD FILE CREATED SUCCESSFULLY ==="
       ls -la ~/.vnc/passwd
