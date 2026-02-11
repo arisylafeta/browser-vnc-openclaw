@@ -93,17 +93,15 @@ services:
       - "${NOVNC_PORT:-6080}:6080"
       - "${VNC_PORT:-5900}:5900"
       - "${CDP_PORT:-9222}:9222"
-    env_file:
-      - .env
     environment:
-      # Port configuration
-      CDP_PORT: 9222
-      VNC_PORT: 5900
-      NOVNC_PORT: 6080
+      # Port configuration (from Coolify env vars)
+      CDP_PORT: ${CDP_PORT:-9222}
+      VNC_PORT: ${VNC_PORT:-5900}
+      NOVNC_PORT: ${NOVNC_PORT:-6080}
       ENABLE_NOVNC: "1"
       HEADLESS: "0"
       
-      # VNC password from environment
+      # VNC password (critical - must be passed from Coolify)
       VNC_PASSWORD: ${VNC_PASSWORD}
       
     volumes:
