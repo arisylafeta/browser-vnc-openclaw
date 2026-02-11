@@ -75,11 +75,8 @@ if [ -f "$CONFIG_FILE" ]; then
         elif ! grep -q '"profiles"' "$CONFIG_FILE" 2>/dev/null; then
             echo "❌ DEBUG: Config missing browser profiles - will regenerate"
             NEED_GENERATE=true
-        elif ! grep -q '"mode"' "$CONFIG_FILE" 2>/dev/null | grep -q 'sandbox'; then
-            echo "❌ DEBUG: Config missing sandbox.mode - will regenerate"
-            NEED_GENERATE=true
-        elif ! grep -q '"tools"' "$CONFIG_FILE" 2>/dev/null | grep -q 'sandbox'; then
-            echo "❌ DEBUG: Config missing tools.sandbox - will regenerate"
+        elif ! grep -q '"allowedControlHosts"' "$CONFIG_FILE" 2>/dev/null; then
+            echo "❌ DEBUG: Config missing allowedControlHosts - will regenerate"
             NEED_GENERATE=true
         else
             echo "✅ DEBUG: Existing config is valid and complete"
@@ -107,10 +104,6 @@ if [ "$NEED_GENERATE" = true ]; then
         PRIMARY_MODEL="google/gemini-2.5-pro"
     fi
     
-    # Get browser-vnc container IP to avoid Host header issues
-    BROWSER_VNC_IP=$(getent hosts browser-vnc | awk '{print $1}' 2>/dev/null || echo "browser-vnc")
-    echo "🔗 Using browser-vnc IP: $BROWSER_VNC_IP"
-    
     # Write JSON directly without heredoc to avoid any expansion issues
     echo '{' > "$CONFIG_FILE"
     echo '  "commands": {' >> "$CONFIG_FILE"
@@ -136,7 +129,7 @@ if [ "$NEED_GENERATE" = true ]; then
     echo '    "enabled": true,' >> "$CONFIG_FILE"
     echo '    "profiles": {' >> "$CONFIG_FILE"
     echo '      "vnc": {' >> "$CONFIG_FILE"
-    echo '        "cdpUrl": "http://${BROWSER_VNC_IP}:9222",' >> "$CONFIG_FILE"
+    echo '        "cdpUrl": "http://browser-vnc:9222",' >> "$CONFIG_FILE"
     echo '        "color": "#00AA00"' >> "$CONFIG_FILE"
     echo '      }' >> "$CONFIG_FILE"
     echo '    }' >> "$CONFIG_FILE"
@@ -155,7 +148,8 @@ if [ "$NEED_GENERATE" = true ]; then
     echo '      "sandbox": {' >> "$CONFIG_FILE"
     echo '        "mode": "non-main",' >> "$CONFIG_FILE"
     echo '        "browser": {' >> "$CONFIG_FILE"
-    echo '          "enabled": true' >> "$CONFIG_FILE"
+    echo '          "enabled": true,' >> "$CONFIG_FILE"
+    echo '          "allowedControlHosts": ["browser-vnc"]' >> "$CONFIG_FILE"
     echo '        },' >> "$CONFIG_FILE"
     echo '        "docker": {' >> "$CONFIG_FILE"
     echo '          "network": "bridge"' >> "$CONFIG_FILE"
