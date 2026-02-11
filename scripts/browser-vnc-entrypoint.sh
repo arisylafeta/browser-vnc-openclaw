@@ -44,12 +44,14 @@ else
   CHROME_ARGS=()
 fi
 
-# Chrome listens directly on 0.0.0.0:9222 for internal Docker network access
-# This allows OpenClaw to connect via hostname while maintaining network isolation
-CHROME_CDP_PORT=9222
+# Chrome CDP ports - use port offset pattern for Docker networking
+# Chrome binds to 127.0.0.1 only (internal port)
+CHROME_CDP_PORT=9223
+# socat exposes on 0.0.0.0 for Docker network access (external port)
+EXTERNAL_CDP_PORT=9222
 
 CHROME_ARGS+=(
-  "--remote-debugging-address=0.0.0.0"
+  "--remote-debugging-address=127.0.0.1"
   "--remote-debugging-port=${CHROME_CDP_PORT}"
   "--remote-allow-origins=*"
   "--user-data-dir=${HOME}/.chrome"
@@ -65,7 +67,8 @@ CHROME_ARGS+=(
 )
 
 echo "🌐 Starting Chromium..."
-echo "   Chrome CDP Port: ${CHROME_CDP_PORT} (listening on 0.0.0.0)"
+echo "   Chrome CDP Port: ${CHROME_CDP_PORT} (internal, 127.0.0.1 only)"
+echo "   External CDP Port: ${EXTERNAL_CDP_PORT} (0.0.0.0 for Docker network)"
 echo "   Headless: ${HEADLESS}"
 chromium "${CHROME_ARGS[@]}" about:blank &
 CHROME_PID=$!
@@ -80,11 +83,11 @@ for i in $(seq 1 50); do
   sleep 0.1
 done
 
-# Chrome binds to 127.0.0.1 regardless of --remote-debugging-address flag
-# Use socat to forward from 0.0.0.0:9222 to 127.0.0.1:9222 for Docker network access
-echo "🔗 Setting up CDP forwarding 0.0.0.0:9222 -> 127.0.0.1:9222..."
-socat TCP-LISTEN:9222,fork,reuseaddr,bind=0.0.0.0 TCP:127.0.0.1:9222 &
-echo "✅ CDP forwarding active on 0.0.0.0:9222"
+# Forward from 0.0.0.0:9222 to 127.0.0.1:9223
+# This allows Docker network access while Chrome only listens on localhost
+echo "🔗 Setting up CDP forwarding ${EXTERNAL_CDP_PORT} -> ${CHROME_CDP_PORT}..."
+socat TCP-LISTEN:${EXTERNAL_CDP_PORT},fork,reuseaddr,bind=0.0.0.0 TCP:127.0.0.1:${CHROME_CDP_PORT} &
+echo "✅ CDP forwarding active on 0.0.0.0:${EXTERNAL_CDP_PORT}"
 
 # Start VNC and noVNC if enabled and not headless
 if [[ "${ENABLE_NOVNC}" == "1" && "${HEADLESS}" != "1" ]]; then
@@ -116,7 +119,7 @@ if [[ "${ENABLE_NOVNC}" == "1" && "${HEADLESS}" != "1" ]]; then
   
   echo ""
   echo "✅ Browser-VNC Service Started!"
-  echo "   CDP: http://browser-vnc:9222 (internal Docker network)"
+  echo "   CDP: http://browser-vnc:${EXTERNAL_CDP_PORT} (internal Docker network)"
   echo "   VNC: localhost:${EXTERNAL_VNC_PORT} (internal: ${INTERNAL_VNC_PORT})"
   echo "   noVNC: http://localhost:${EXTERNAL_NOVNC_PORT}/vnc.html"
   if [[ -n "${VNC_PASSWORD}" ]]; then
