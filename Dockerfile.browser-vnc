@@ -26,6 +26,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy our custom entrypoint with VNC password support
+# Cache bust: 2026-02-11-001
 COPY scripts/browser-vnc-entrypoint.sh /usr/local/bin/browser-vnc-entrypoint
 RUN chmod +x /usr/local/bin/browser-vnc-entrypoint
 
