@@ -14,6 +14,13 @@ ENABLE_NOVNC="${ENABLE_NOVNC:-1}"
 HEADLESS="${HEADLESS:-0}"
 VNC_PASSWORD="${VNC_PASSWORD:-}"
 
+# Debug: Check environment
+echo "=== ENVIRONMENT DEBUG ==="
+echo "HOME=$HOME"
+echo "VNC_PASSWORD set: $([ -n "$VNC_PASSWORD" ] && echo 'YES' || echo 'NO')"
+echo "VNC_PASSWORD length: ${#VNC_PASSWORD}"
+echo "========================="
+
 # Create necessary directories
 mkdir -p "${HOME}" "${HOME}/.chrome" "${XDG_CONFIG_HOME}" "${XDG_CACHE_HOME}"
 
@@ -83,17 +90,21 @@ if [[ "${ENABLE_NOVNC}" == "1" && "${HEADLESS}" != "1" ]]; then
   
   # Configure VNC password if provided
   if [[ -n "${VNC_PASSWORD}" ]]; then
-    echo "🔒 Configuring VNC password..."
+    echo "=== CONFIGURING VNC PASSWORD ==="
+    echo "VNC_PASSWORD is set (length: ${#VNC_PASSWORD})"
     # Remove any existing password file to ensure fresh config
     rm -f ~/.vnc/passwd
     mkdir -p ~/.vnc
     echo "${VNC_PASSWORD}" | x11vnc -storepasswd /dev/stdin ~/.vnc/passwd
-    echo "✅ VNC password configured"
+    if [ -f ~/.vnc/passwd ]; then
+      echo "=== VNC PASSWORD FILE CREATED SUCCESSFULLY ==="
+      ls -la ~/.vnc/passwd
+    else
+      echo "=== ERROR: VNC PASSWORD FILE NOT CREATED ==="
+    fi
     x11vnc -display :1 -rfbport "${VNC_PORT}" -shared -forever -rfbauth ~/.vnc/passwd &
-    echo "   VNC server started with password authentication on port ${VNC_PORT}"
   else
-    echo "⚠️  WARNING: No VNC_PASSWORD environment variable set!"
-    echo "   Starting VNC without password authentication (insecure)"
+    echo "=== WARNING: NO VNC_PASSWORD SET - RUNNING WITHOUT AUTH ==="
     x11vnc -display :1 -rfbport "${VNC_PORT}" -shared -forever -nopw &
   fi
   
