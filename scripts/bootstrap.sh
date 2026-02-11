@@ -72,8 +72,8 @@ if [ -f "$CONFIG_FILE" ]; then
         elif ! grep -q '"channels"' "$CONFIG_FILE" 2>/dev/null; then
             echo "❌ DEBUG: Config missing channels section - will regenerate"
             NEED_GENERATE=true
-        elif ! grep -q '"browser"' "$CONFIG_FILE" 2>/dev/null; then
-            echo "❌ DEBUG: Config missing browser section - will regenerate"
+        elif ! grep -q '"sandbox"' "$CONFIG_FILE" 2>/dev/null; then
+            echo "❌ DEBUG: Config missing sandbox section - will regenerate"
             NEED_GENERATE=true
         else
             echo "✅ DEBUG: Existing config is valid and complete"
@@ -138,7 +138,16 @@ if [ "$NEED_GENERATE" = true ]; then
     echo '    "defaults": {' >> "$CONFIG_FILE"
     echo "      \"workspace\": \"${WORKSPACE_DIR}\"," >> "$CONFIG_FILE"
     echo "      \"model\": { \"primary\": \"${PRIMARY_MODEL}\" }," >> "$CONFIG_FILE"
-    echo '      "maxConcurrent": 2' >> "$CONFIG_FILE"
+    echo '      "maxConcurrent": 2,' >> "$CONFIG_FILE"
+    echo '      "sandbox": {' >> "$CONFIG_FILE"
+    echo '        "browser": {' >> "$CONFIG_FILE"
+    echo '          "enabled": true,' >> "$CONFIG_FILE"
+    echo '          "cdpUrl": "http://browser-vnc:9222",' >> "$CONFIG_FILE"
+    echo '          "headless": false,' >> "$CONFIG_FILE"
+    echo '          "enableNoVnc": true,' >> "$CONFIG_FILE"
+    echo '          "noSandbox": true' >> "$CONFIG_FILE"
+    echo '        }' >> "$CONFIG_FILE"
+    echo '      }' >> "$CONFIG_FILE"
     echo '    },' >> "$CONFIG_FILE"
     echo '    "list": [' >> "$CONFIG_FILE"
     echo "      { \"id\": \"main\", \"default\": true, \"workspace\": \"${WORKSPACE_DIR}\" }" >> "$CONFIG_FILE"
