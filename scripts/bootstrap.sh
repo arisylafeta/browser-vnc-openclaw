@@ -75,8 +75,11 @@ if [ -f "$CONFIG_FILE" ]; then
         elif ! grep -q '"profiles"' "$CONFIG_FILE" 2>/dev/null; then
             echo "❌ DEBUG: Config missing browser profiles - will regenerate"
             NEED_GENERATE=true
-        elif ! grep -q '"enabled": true' "$CONFIG_FILE" 2>/dev/null | grep -A5 '"sandbox"' | grep -q '"browser"'; then
-            echo "❌ DEBUG: Config has sandbox browser disabled - will regenerate"
+        elif ! grep -q '"mode"' "$CONFIG_FILE" 2>/dev/null | grep -q 'sandbox'; then
+            echo "❌ DEBUG: Config missing sandbox.mode - will regenerate"
+            NEED_GENERATE=true
+        elif ! grep -q '"tools"' "$CONFIG_FILE" 2>/dev/null | grep -q 'sandbox'; then
+            echo "❌ DEBUG: Config missing tools.sandbox - will regenerate"
             NEED_GENERATE=true
         else
             echo "✅ DEBUG: Existing config is valid and complete"
