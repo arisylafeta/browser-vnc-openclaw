@@ -75,6 +75,9 @@ if [ -f "$CONFIG_FILE" ]; then
         elif ! grep -q '"profiles"' "$CONFIG_FILE" 2>/dev/null; then
             echo "❌ DEBUG: Config missing browser profiles - will regenerate"
             NEED_GENERATE=true
+        elif ! grep -q '"enabled": true' "$CONFIG_FILE" 2>/dev/null | grep -A5 '"sandbox"' | grep -q '"browser"'; then
+            echo "❌ DEBUG: Config has sandbox browser disabled - will regenerate"
+            NEED_GENERATE=true
         else
             echo "✅ DEBUG: Existing config is valid and complete"
         fi
@@ -92,7 +95,7 @@ if [ "$NEED_GENERATE" = true ]; then
     echo "🏥 Generating openclaw.json with browser configuration..."
     
     # Determine primary model based on available API keys
-    PRIMARY_MODEL="openai/gpt-4o"
+    PRIMARY_MODEL="openai/gpt-5.2"
     if [ -n "$ANTHROPIC_API_KEY" ]; then
         PRIMARY_MODEL="anthropic/claude-sonnet-4-5"
     elif [ -n "$OPENAI_API_KEY" ]; then
@@ -143,15 +146,26 @@ if [ "$NEED_GENERATE" = true ]; then
     echo "      \"model\": { \"primary\": \"${PRIMARY_MODEL}\" }," >> "$CONFIG_FILE"
     echo '      "maxConcurrent": 2,' >> "$CONFIG_FILE"
     echo '      "sandbox": {' >> "$CONFIG_FILE"
+    echo '        "mode": "non-main",' >> "$CONFIG_FILE"
     echo '        "browser": {' >> "$CONFIG_FILE"
     echo '          "enabled": true' >> "$CONFIG_FILE"
-
+    echo '        },' >> "$CONFIG_FILE"
+    echo '        "docker": {' >> "$CONFIG_FILE"
+    echo '          "network": "bridge"' >> "$CONFIG_FILE"
     echo '        }' >> "$CONFIG_FILE"
     echo '      }' >> "$CONFIG_FILE"
     echo '    },' >> "$CONFIG_FILE"
     echo '    "list": [' >> "$CONFIG_FILE"
     echo "      { \"id\": \"main\", \"default\": true, \"workspace\": \"${WORKSPACE_DIR}\" }" >> "$CONFIG_FILE"
     echo '    ]' >> "$CONFIG_FILE"
+    echo '  },' >> "$CONFIG_FILE"
+    echo '  "tools": {' >> "$CONFIG_FILE"
+    echo '    "sandbox": {' >> "$CONFIG_FILE"
+    echo '      "tools": {' >> "$CONFIG_FILE"
+    echo '        "allow": ["browser"],' >> "$CONFIG_FILE"
+    echo '        "deny": ["canvas", "nodes", "cron", "discord", "gateway"]' >> "$CONFIG_FILE"
+    echo '      }' >> "$CONFIG_FILE"
+    echo '    }' >> "$CONFIG_FILE"
     echo '  }' >> "$CONFIG_FILE"
     echo '}' >> "$CONFIG_FILE"
     
