@@ -144,7 +144,7 @@ if [ "$NEED_GENERATE" = true ]; then
     echo '      "maxConcurrent": 2,' >> "$CONFIG_FILE"
     echo '      "sandbox": {' >> "$CONFIG_FILE"
     echo '        "browser": {' >> "$CONFIG_FILE"
-    echo '          "enabled": false' >> "$CONFIG_FILE"
+    echo '          "enabled": true' >> "$CONFIG_FILE"
 
     echo '        }' >> "$CONFIG_FILE"
     echo '      }' >> "$CONFIG_FILE"
