@@ -12,24 +12,43 @@ GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
 NOVNC_PORT="${NOVNC_PORT:-6080}"
 VNC_PASSWORD="${VNC_PASSWORD:-}"
 
-# Browser-vnc is accessed via Docker internal DNS
-# Chrome now listens on 0.0.0.0, accepting connections from any Docker network host
+# browser-vnc container IP resolution for Chrome CDP compatibility
+# Chrome requires Host header to be localhost or IP, rejecting hostnames
+# We resolve browser-vnc's Docker DNS to get its internal IP
 BROWSER_VNC_HOST="browser-vnc"
+echo "🔍 Resolving browser-vnc container IP..."
+BROWSER_VNC_IP=$(getent hosts "$BROWSER_VNC_HOST" 2>/dev/null | awk '{ print $1 }')
+if [ -z "$BROWSER_VNC_IP" ]; then
+    echo "⚠️  Could not resolve browser-vnc IP via DNS, trying alternative methods..."
+    # Fallback: try to get IP from container's /etc/hosts
+    BROWSER_VNC_IP=$(cat /etc/hosts 2>/dev/null | grep "$BROWSER_VNC_HOST" | awk '{ print $1 }')
+fi
+if [ -z "$BROWSER_VNC_IP" ]; then
+    echo "⚠️  Warning: Could not resolve browser-vnc IP. Chrome CDP may reject connections."
+    echo "    Using hostname as fallback (this may fail with Chrome's Host header validation)"
+    BROWSER_VNC_IP="$BROWSER_VNC_HOST"
+else
+    echo "✅ Resolved browser-vnc IP: $BROWSER_VNC_IP"
+fi
 
 # Wait a moment for browser-vnc to fully start
 echo "⏳ Waiting 5 seconds for browser-vnc Chrome to be ready..."
 sleep 5
 
-# Test if CDP is reachable via Docker network
-echo "🔍 Testing CDP connection to http://${BROWSER_VNC_HOST}:9222..."
-if curl -sS --max-time 5 "http://${BROWSER_VNC_HOST}:9222/json/version" >/dev/null 2>&1; then
-    echo "✅ CDP is reachable at http://${BROWSER_VNC_HOST}:9222"
+# Test if CDP is reachable via IP (more reliable than hostname)
+echo "🔍 Testing CDP connection to http://${BROWSER_VNC_IP}:9222..."
+if curl -sS --max-time 5 "http://${BROWSER_VNC_IP}:9222/json/version" >/dev/null 2>&1; then
+    echo "✅ CDP is reachable at http://${BROWSER_VNC_IP}:9222"
+    CDP_URL="http://${BROWSER_VNC_IP}:9222"
 else
-    echo "⚠️  CDP not yet reachable - OpenClaw may retry on first browser use"
+    echo "⚠️  CDP not yet reachable at ${BROWSER_VNC_IP}:9222 - OpenClaw may retry on first browser use"
+    CDP_URL="http://${BROWSER_VNC_IP}:9222"
 fi
 
 echo "🔍 DEBUG: Starting bootstrap"
 echo "   BROWSER_VNC_HOST=$BROWSER_VNC_HOST"
+echo "   BROWSER_VNC_IP=$BROWSER_VNC_IP"
+echo "   CDP_URL=$CDP_URL"
 echo "   CONFIG_FILE=$CONFIG_FILE"
 echo "   GATEWAY_PORT=$GATEWAY_PORT"
 echo "   GATEWAY_TOKEN=${GATEWAY_TOKEN:0:10}..."
@@ -120,7 +139,7 @@ if [ "$NEED_GENERATE" = true ]; then
     echo '    "enabled": true,' >> "$CONFIG_FILE"
     echo '    "profiles": {' >> "$CONFIG_FILE"
     echo '      "vnc": {' >> "$CONFIG_FILE"
-    echo "        \"cdpUrl\": \"http://${BROWSER_VNC_HOST}:9222\"," >> "$CONFIG_FILE"
+    echo "        \"cdpUrl\": \"http://${BROWSER_VNC_IP}:9222\"," >> "$CONFIG_FILE"
     echo '        "color": "#00AA00"' >> "$CONFIG_FILE"
     echo '      }' >> "$CONFIG_FILE"
     echo '    }' >> "$CONFIG_FILE"
@@ -192,7 +211,7 @@ if [ -n "$CONTAINER_NAME" ]; then
 fi
 
 echo ""
-echo "🌐 Browser CDP: http://${BROWSER_VNC_HOST}:9222 (internal Docker network)"
+echo "🌐 Browser CDP: http://${BROWSER_VNC_IP}:9222 (internal Docker network, IP-based for Chrome Host header)"
 echo "🌐 Browser noVNC: http://localhost:$NOVNC_PORT/vnc.html"
 if [ -n "$VNC_PASSWORD" ]; then
     echo "🔒 VNC Password: $VNC_PASSWORD"
