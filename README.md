@@ -117,10 +117,30 @@ This tells OpenClaw to:
 
 ## Security
 
-- **VNC Password**: Configurable via `VNC_PASSWORD` environment variable
-- **CDP Port**: Internal Docker network only (not exposed to internet)
-- **Docker Proxy**: Restricts Docker API access
+This template implements defense-in-depth security based on OpenClaw's sandbox hardening best practices:
+
+### Container Hardening (browser-vnc)
+- **Capability Dropping**: All Linux capabilities dropped (`cap_drop: ALL`)
+- **No New Privileges**: Prevents privilege escalation (`no-new-privileges:true`)
+- **Read-Only Root**: Filesystem is read-only except for tmpfs and volumes
+- **Tmpfs Mounts**: Writable directories (`/tmp`, `/var/tmp`, `/run`) mounted as memory-only
+- **Non-Root User**: Runs as `sandbox` user (not root)
+
+### Network Security
+- **CDP Internal-Only**: Chrome DevTools Protocol is NOT exposed externally
+  - CDP has NO authentication and allows arbitrary code execution
+  - Only accessible within Docker network (OpenClaw → browser-vnc)
+- **VNC Password Protection**: Configurable via `VNC_PASSWORD` environment variable
+- **Docker Proxy**: Restricts Docker API access for OpenClaw sandboxing
 - **Hard Isolation**: Each deployment is completely isolated
+
+### Port Exposure
+| Port | Service | External Access | Notes |
+|------|---------|-----------------|-------|
+| 18789 | OpenClaw Gateway | ✅ Yes | Requires token authentication |
+| 6080 | noVNC Web | ✅ Yes | Web-based VNC access |
+| 5900 | VNC Server | ✅ Yes | Direct VNC client access |
+| 9222 | Chrome CDP | ❌ No | **Internal Docker network only** |
 
 ## Testing Locally
 
@@ -155,9 +175,11 @@ This tells OpenClaw to:
 3. Verify VNC password is set correctly
 
 ### OpenClaw can't control browser
-1. Verify both services are on same Docker network
-2. Check OpenClaw logs for CDP connection errors
-3. Ensure browser-vnc is fully started before OpenClaw
+The new architecture uses Docker DNS and direct Chrome binding:
+1. Verify both services are on same Docker network (automatic with docker-compose)
+2. Check OpenClaw logs: `docker-compose logs openclaw | grep -i browser`
+3. Verify Chrome is listening: `docker-compose exec browser-vnc ss -tlnp | grep 9222`
+4. Test from OpenClaw container: `docker-compose exec openclaw curl http://browser-vnc:9222/json/version`
 
 ### Browser data not persisting
 1. Check volume mounts: `docker volume ls`
@@ -174,9 +196,9 @@ This tells OpenClaw to:
 
 Port mapping format: `external:internal`
 - `18789:18789` - OpenClaw gateway
-- `16080:6080` - noVNC web interface
-- `16081:5900` - VNC server
-- `16082:9222` - Chrome DevTools Protocol
+- `6080:6080` - noVNC web interface  
+- `5900:5900` - VNC server
+- ~~9222~~ - Chrome CDP (internal Docker network only, not exposed)
 
 ## License
 

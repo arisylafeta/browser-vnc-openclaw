@@ -90,9 +90,20 @@ services:
       dockerfile: Dockerfile.browser-vnc
     restart: unless-stopped
     ports:
+      # VNC and noVNC are exposed for user access
       - "${NOVNC_PORT:-6080}:6080"
       - "${VNC_PORT:-5900}:5900"
-      - "${CDP_PORT:-9222}:9222"
+      # CDP is internal-only (Docker network only) for security
+      # Chrome DevTools Protocol has no authentication - never expose externally
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/tmp
+      - /run
     environment:
       # Port configuration - FIXED internal ports
       # (docker-compose maps external ports to these)

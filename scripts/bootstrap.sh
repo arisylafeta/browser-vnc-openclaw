@@ -12,7 +12,24 @@ GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
 NOVNC_PORT="${NOVNC_PORT:-6080}"
 VNC_PASSWORD="${VNC_PASSWORD:-}"
 
+# Browser-vnc is accessed via Docker internal DNS
+# Chrome now listens on 0.0.0.0, accepting connections from any Docker network host
+BROWSER_VNC_HOST="browser-vnc"
+
+# Wait a moment for browser-vnc to fully start
+echo "⏳ Waiting 5 seconds for browser-vnc Chrome to be ready..."
+sleep 5
+
+# Test if CDP is reachable via Docker network
+echo "🔍 Testing CDP connection to http://${BROWSER_VNC_HOST}:9222..."
+if curl -sS --max-time 5 "http://${BROWSER_VNC_HOST}:9222/json/version" >/dev/null 2>&1; then
+    echo "✅ CDP is reachable at http://${BROWSER_VNC_HOST}:9222"
+else
+    echo "⚠️  CDP not yet reachable - OpenClaw may retry on first browser use"
+fi
+
 echo "🔍 DEBUG: Starting bootstrap"
+echo "   BROWSER_VNC_HOST=$BROWSER_VNC_HOST"
 echo "   CONFIG_FILE=$CONFIG_FILE"
 echo "   GATEWAY_PORT=$GATEWAY_PORT"
 echo "   GATEWAY_TOKEN=${GATEWAY_TOKEN:0:10}..."
@@ -59,36 +76,10 @@ validate_json() {
     return 1
 }
 
-# Check if config exists and has required fields
-NEED_GENERATE=false
-if [ -f "$CONFIG_FILE" ]; then
-    echo "🔍 DEBUG: Config file exists at $CONFIG_FILE"
-    
-    if validate_json "$CONFIG_FILE"; then
-        # Check for required fields
-        if ! grep -q '"mode"' "$CONFIG_FILE" 2>/dev/null; then
-            echo "❌ DEBUG: Config missing gateway.mode - will regenerate"
-            NEED_GENERATE=true
-        elif ! grep -q '"channels"' "$CONFIG_FILE" 2>/dev/null; then
-            echo "❌ DEBUG: Config missing channels section - will regenerate"
-            NEED_GENERATE=true
-        elif ! grep -q '"profiles"' "$CONFIG_FILE" 2>/dev/null; then
-            echo "❌ DEBUG: Config missing browser profiles - will regenerate"
-            NEED_GENERATE=true
-        elif ! grep -q '"allowedControlHosts"' "$CONFIG_FILE" 2>/dev/null; then
-            echo "❌ DEBUG: Config missing allowedControlHosts - will regenerate"
-            NEED_GENERATE=true
-        else
-            echo "✅ DEBUG: Existing config is valid and complete"
-        fi
-    else
-        echo "❌ DEBUG: Existing config is INVALID JSON - will regenerate"
-        NEED_GENERATE=true
-    fi
-else
-    echo "🔍 DEBUG: Config file does not exist - will generate"
-    NEED_GENERATE=true
-fi
+# Always regenerate config to ensure fresh IP resolution
+# (Commented out config checking to force regeneration every time)
+echo "🔍 DEBUG: Force regenerating config file..."
+NEED_GENERATE=true
 
 # Generate config if needed
 if [ "$NEED_GENERATE" = true ]; then
@@ -125,40 +116,39 @@ if [ "$NEED_GENERATE" = true ]; then
     echo '      }' >> "$CONFIG_FILE"  
     echo '    }' >> "$CONFIG_FILE"  
     echo '  },' >> "$CONFIG_FILE"  
-    echo '  "browser": {' >> "$CONFIG_FILE"  
-    echo '    "enabled": true,' >> "$CONFIG_FILE"  
-    echo '    "profiles": {' >> "$CONFIG_FILE"  
-    echo '      "vnc": {' >> "$CONFIG_FILE"  
-    echo '        "cdpUrl": "http://browser-vnc:9222",' >> "$CONFIG_FILE"  
-    echo '        "color": "#00AA00"' >> "$CONFIG_FILE"  
-    echo '      }' >> "$CONFIG_FILE"  
-    echo '    }' >> "$CONFIG_FILE"  
-    echo '  },' >> "$CONFIG_FILE"  
-    echo '  "gateway": {' >> "$CONFIG_FILE"  
-    echo "    \"port\": $GATEWAY_PORT," >> "$CONFIG_FILE"  
-    echo '    "mode": "local",' >> "$CONFIG_FILE"  
-    echo "    \"bind\": \"${OPENCLAW_GATEWAY_BIND:-lan}\"," >> "$CONFIG_FILE"  
-    echo "    \"auth\": { \"mode\": \"token\", \"token\": \"${GATEWAY_TOKEN}\" }" >> "$CONFIG_FILE"  
-    echo '  },' >> "$CONFIG_FILE"  
-    echo '  "agents": {' >> "$CONFIG_FILE"  
-    echo '    "defaults": {' >> "$CONFIG_FILE"  
-    echo "      \"workspace\": \"${WORKSPACE_DIR}\"," >> "$CONFIG_FILE"  
-    echo "      \"model\": { \"primary\": \"${PRIMARY_MODEL}\" }," >> "$CONFIG_FILE"  
-    echo '      "maxConcurrent": 2,' >> "$CONFIG_FILE"  
-    echo '      "sandbox": {' >> "$CONFIG_FILE"  
-    echo '        "mode": "non-main",' >> "$CONFIG_FILE"  
-    echo '        "browser": {' >> "$CONFIG_FILE"  
-    echo '          "enabled": true,' >> "$CONFIG_FILE"  
-    echo '          "allowedControlHosts": ["browser-vnc"]' >> "$CONFIG_FILE"  
-    echo '        },' >> "$CONFIG_FILE"  
-    echo '        "docker": {' >> "$CONFIG_FILE"  
-    echo '          "network": "bridge"' >> "$CONFIG_FILE"  
-    echo '        }' >> "$CONFIG_FILE"  
-    echo '      }' >> "$CONFIG_FILE"  
-    echo '    },' >> "$CONFIG_FILE"  
-    echo '    "list": [' >> "$CONFIG_FILE"  
-    echo "      { \"id\": \"main\", \"default\": true, \"workspace\": \"${WORKSPACE_DIR}\" }" >> "$CONFIG_FILE"  
-    echo '    ]' >> "$CONFIG_FILE"  
+    echo '  "browser": {' >> "$CONFIG_FILE"
+    echo '    "enabled": true,' >> "$CONFIG_FILE"
+    echo '    "profiles": {' >> "$CONFIG_FILE"
+    echo '      "vnc": {' >> "$CONFIG_FILE"
+    echo "        \"cdpUrl\": \"http://${BROWSER_VNC_HOST}:9222\"," >> "$CONFIG_FILE"
+    echo '        "color": "#00AA00"' >> "$CONFIG_FILE"
+    echo '      }' >> "$CONFIG_FILE"
+    echo '    }' >> "$CONFIG_FILE"
+    echo '  },' >> "$CONFIG_FILE"
+    echo '  "gateway": {' >> "$CONFIG_FILE"
+    echo "    \"port\": $GATEWAY_PORT," >> "$CONFIG_FILE"
+    echo '    "mode": "local",' >> "$CONFIG_FILE"
+    echo "    \"bind\": \"${OPENCLAW_GATEWAY_BIND:-lan}\"," >> "$CONFIG_FILE"
+    echo "    \"auth\": { \"mode\": \"token\", \"token\": \"${GATEWAY_TOKEN}\" }" >> "$CONFIG_FILE"
+    echo '  },' >> "$CONFIG_FILE"
+    echo '  "agents": {' >> "$CONFIG_FILE"
+    echo '    "defaults": {' >> "$CONFIG_FILE"
+    echo "      \"workspace\": \"${WORKSPACE_DIR}\"," >> "$CONFIG_FILE"
+    echo "      \"model\": { \"primary\": \"${PRIMARY_MODEL}\" }," >> "$CONFIG_FILE"
+    echo '      "maxConcurrent": 2,' >> "$CONFIG_FILE"
+    echo '      "sandbox": {' >> "$CONFIG_FILE"
+    echo '        "mode": "non-main",' >> "$CONFIG_FILE"
+    echo '        "browser": {' >> "$CONFIG_FILE"
+    echo '          "enabled": true' >> "$CONFIG_FILE"
+    echo '        },' >> "$CONFIG_FILE"
+    echo '        "docker": {' >> "$CONFIG_FILE"
+    echo '          "network": "bridge"' >> "$CONFIG_FILE"
+    echo '        }' >> "$CONFIG_FILE"
+    echo '      }' >> "$CONFIG_FILE"
+    echo '    },' >> "$CONFIG_FILE"
+    echo '    "list": [' >> "$CONFIG_FILE"
+    echo "      { \"id\": \"main\", \"default\": true, \"workspace\": \"${WORKSPACE_DIR}\" }" >> "$CONFIG_FILE"
+    echo '    ]' >> "$CONFIG_FILE"
     echo '  },' >> "$CONFIG_FILE"  
     echo '  "tools": {' >> "$CONFIG_FILE"  
     echo '    "sandbox": {' >> "$CONFIG_FILE"  
@@ -176,6 +166,9 @@ fi
 # Final validation
 if validate_json "$CONFIG_FILE"; then
     echo "✅ Final config validation passed"
+    echo ""
+    echo "🔍 DEBUG: Generated config:"
+    cat "$CONFIG_FILE"
 else
     echo "❌ FATAL: Config file is still invalid after generation!"
     echo "   Contents:"
@@ -197,7 +190,9 @@ echo "🌍 OpenClaw Gateway: http://localhost:$GATEWAY_PORT?token=$GATEWAY_TOKEN
 if [ -n "$CONTAINER_NAME" ]; then
     echo "📦 Container: $CONTAINER_NAME"
 fi
+
 echo ""
+echo "🌐 Browser CDP: http://${BROWSER_VNC_HOST}:9222 (internal Docker network)"
 echo "🌐 Browser noVNC: http://localhost:$NOVNC_PORT/vnc.html"
 if [ -n "$VNC_PASSWORD" ]; then
     echo "🔒 VNC Password: $VNC_PASSWORD"
