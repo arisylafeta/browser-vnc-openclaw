@@ -80,9 +80,11 @@ for i in $(seq 1 50); do
   sleep 0.1
 done
 
-# Chrome now listens directly on 0.0.0.0:9222
-# No socat forwarding needed - simplifies architecture and fixes Host header issues
-echo "🔗 Chrome CDP listening on 0.0.0.0:${CHROME_CDP_PORT}"
+# Chrome binds to 127.0.0.1 regardless of --remote-debugging-address flag
+# Use socat to forward from 0.0.0.0:9222 to 127.0.0.1:9222 for Docker network access
+echo "🔗 Setting up CDP forwarding 0.0.0.0:9222 -> 127.0.0.1:9222..."
+socat TCP-LISTEN:9222,fork,reuseaddr,bind=0.0.0.0 TCP:127.0.0.1:9222 &
+echo "✅ CDP forwarding active on 0.0.0.0:9222"
 
 # Start VNC and noVNC if enabled and not headless
 if [[ "${ENABLE_NOVNC}" == "1" && "${HEADLESS}" != "1" ]]; then
