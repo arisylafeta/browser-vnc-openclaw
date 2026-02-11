@@ -99,11 +99,8 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /var/tmp
-      - /run
+    # Note: read_only removed because Chrome needs to write to its profile directory
+    # for DevTools protocol to work properly on 0.0.0.0
     environment:
       # Port configuration - FIXED internal ports
       # (docker-compose maps external ports to these)
