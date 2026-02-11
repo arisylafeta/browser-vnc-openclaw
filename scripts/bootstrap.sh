@@ -72,8 +72,8 @@ if [ -f "$CONFIG_FILE" ]; then
         elif ! grep -q '"channels"' "$CONFIG_FILE" 2>/dev/null; then
             echo "❌ DEBUG: Config missing channels section - will regenerate"
             NEED_GENERATE=true
-        elif ! grep -q '"sandbox"' "$CONFIG_FILE" 2>/dev/null; then
-            echo "❌ DEBUG: Config missing sandbox section - will regenerate"
+        elif ! grep -q '"profiles"' "$CONFIG_FILE" 2>/dev/null; then
+            echo "❌ DEBUG: Config missing browser profiles - will regenerate"
             NEED_GENERATE=true
         else
             echo "✅ DEBUG: Existing config is valid and complete"
@@ -101,9 +101,6 @@ if [ "$NEED_GENERATE" = true ]; then
         PRIMARY_MODEL="google/gemini-2.5-pro"
     fi
     
-    # Build browser configuration
-    BROWSER_CONFIG="\"enabled\": true, \"attachOnly\": true, \"cdpUrl\": \"http://browser-vnc:9222\", \"noSandbox\": true, \"headless\": false"
-    
     # Write JSON directly without heredoc to avoid any expansion issues
     echo '{' > "$CONFIG_FILE"
     echo '  "commands": {' >> "$CONFIG_FILE"
@@ -126,7 +123,13 @@ if [ "$NEED_GENERATE" = true ]; then
     echo '    }' >> "$CONFIG_FILE"
     echo '  },' >> "$CONFIG_FILE"
     echo '  "browser": {' >> "$CONFIG_FILE"
-    echo "    ${BROWSER_CONFIG}" >> "$CONFIG_FILE"
+    echo '    "enabled": true,' >> "$CONFIG_FILE"
+    echo '    "profiles": {' >> "$CONFIG_FILE"
+    echo '      "vnc": {' >> "$CONFIG_FILE"
+    echo '        "cdpUrl": "http://browser-vnc:9222",' >> "$CONFIG_FILE"
+    echo '        "color": "#00AA00"' >> "$CONFIG_FILE"
+    echo '      }' >> "$CONFIG_FILE"
+    echo '    }' >> "$CONFIG_FILE"
     echo '  },' >> "$CONFIG_FILE"
     echo '  "gateway": {' >> "$CONFIG_FILE"
     echo "    \"port\": $GATEWAY_PORT," >> "$CONFIG_FILE"
@@ -141,11 +144,8 @@ if [ "$NEED_GENERATE" = true ]; then
     echo '      "maxConcurrent": 2,' >> "$CONFIG_FILE"
     echo '      "sandbox": {' >> "$CONFIG_FILE"
     echo '        "browser": {' >> "$CONFIG_FILE"
-    echo '          "enabled": true,' >> "$CONFIG_FILE"
-    echo '          "cdpUrl": "http://browser-vnc:9222",' >> "$CONFIG_FILE"
-    echo '          "headless": false,' >> "$CONFIG_FILE"
-    echo '          "enableNoVnc": true,' >> "$CONFIG_FILE"
-    echo '          "noSandbox": true' >> "$CONFIG_FILE"
+    echo '          "enabled": false' >> "$CONFIG_FILE"
+
     echo '        }' >> "$CONFIG_FILE"
     echo '      }' >> "$CONFIG_FILE"
     echo '    },' >> "$CONFIG_FILE"
