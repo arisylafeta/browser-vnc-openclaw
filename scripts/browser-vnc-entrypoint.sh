@@ -62,7 +62,6 @@ CHROME_ARGS+=(
   "--disable-crash-reporter"
   "--metrics-recording-only"
   "--no-sandbox"
-  "--disable-setuid-sandbox"
 )
 
 echo "🌐 Starting Chromium..."
