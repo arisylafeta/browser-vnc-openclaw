@@ -10,8 +10,8 @@ services:
       context: .
       dockerfile: Dockerfile.openclaw
     restart: on-failure:5
-    expose:
-      - "${OPENCLAW_GATEWAY_PORT:-18789}"
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:${OPENCLAW_GATEWAY_PORT:-18789}"
     env_file:
       - .env
     environment:
@@ -29,7 +29,7 @@ services:
       # Workspace paths
       OPENCLAW_STATE_DIR: /data/.openclaw
       OPENCLAW_WORKSPACE: /data/openclaw-workspace
-      OPENCLAW_GATEWAY_BIND: ${OPENCLAW_GATEWAY_BIND:-lan}
+      OPENCLAW_GATEWAY_BIND: lan
       
       # Gateway authentication
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
@@ -92,9 +92,8 @@ services:
       context: .
       dockerfile: Dockerfile.browser-vnc
     restart: unless-stopped
-    expose:
-      - "6080"
-      - "5900"
+    ports:
+      - "${NOVNC_PORT:-6080}:6080"
     cap_drop:
       - ALL
     security_opt:
