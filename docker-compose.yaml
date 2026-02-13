@@ -1,5 +1,8 @@
 # EasyClaw Browser-VNC Template
 # Provides OpenClaw with dedicated VNC-enabled browser
+#
+# Access via Tailscale backend proxy only - no public port exposure
+# Backend connects to: http://{tailscale-ip}:{port}
 
 services:
   openclaw:
@@ -7,8 +10,8 @@ services:
       context: .
       dockerfile: Dockerfile.openclaw
     restart: on-failure:5
-    ports:
-      - "${OPENCLAW_GATEWAY_PORT:-18789}:${OPENCLAW_GATEWAY_PORT:-18789}"
+    expose:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}"
     env_file:
       - .env
     environment:
@@ -89,12 +92,9 @@ services:
       context: .
       dockerfile: Dockerfile.browser-vnc
     restart: unless-stopped
-    ports:
-      # VNC and noVNC are exposed for user access
-      - "${NOVNC_PORT:-6080}:6080"
-      - "${VNC_PORT:-5900}:5900"
-      # CDP is internal-only (Docker network only) for security
-      # Chrome DevTools Protocol has no authentication - never expose externally
+    expose:
+      - "6080"
+      - "5900"
     cap_drop:
       - ALL
     security_opt:
