@@ -57,8 +57,14 @@ services:
       OPENCLAW_PRINT_ACCESS: "1"
 
     volumes:
-      - openclaw-data:/data
-      - openclaw-workspace:/data/openclaw-workspace
+      - type: bind
+        source: /data/coolify/applications/${CONTAINER_ID}/data
+        target: /data
+        is_directory: true
+      - type: bind
+        source: /data/coolify/applications/${CONTAINER_ID}/workspace
+        target: /data/openclaw-workspace
+        is_directory: true
 
     depends_on:
       - docker-proxy
@@ -114,8 +120,14 @@ services:
       VNC_PASSWORD: ${VNC_PASSWORD}
       
     volumes:
-      - browser-data:/home/sandbox/.config/chromium
-      - browser-downloads:/home/sandbox/Downloads
+      - type: bind
+        source: /data/coolify/applications/${CONTAINER_ID}/browser-config
+        target: /home/sandbox/.config/chromium
+        is_directory: true
+      - type: bind
+        source: /data/coolify/applications/${CONTAINER_ID}/browser-downloads
+        target: /home/sandbox/Downloads
+        is_directory: true
     
     healthcheck:
       test: ["CMD", "curl", "-fsS", "--max-time", "2", "http://localhost:6080/vnc.html"]
@@ -124,8 +136,3 @@ services:
       retries: 10
       start_period: 30s
 
-volumes:
-  openclaw-data:
-  openclaw-workspace:
-  browser-data:
-  browser-downloads:
