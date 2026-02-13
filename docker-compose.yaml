@@ -57,8 +57,8 @@ services:
       OPENCLAW_PRINT_ACCESS: "1"
 
     volumes:
-      - /data/coolify/applications/${COOLIFY_RESOURCE_UUID}/data:/data
-      - /data/coolify/applications/${COOLIFY_RESOURCE_UUID}/workspace:/data/openclaw-workspace
+      - openclaw-data:/data
+      - openclaw-workspace:/data/openclaw-workspace
 
     depends_on:
       - docker-proxy
@@ -114,8 +114,8 @@ services:
       VNC_PASSWORD: ${VNC_PASSWORD}
       
     volumes:
-      - /data/coolify/applications/${COOLIFY_RESOURCE_UUID}/browser-config:/home/sandbox/.config/chromium
-      - /data/coolify/applications/${COOLIFY_RESOURCE_UUID}/browser-downloads:/home/sandbox/Downloads
+      - browser-config:/home/sandbox/.config/chromium
+      - browser-downloads:/home/sandbox/Downloads
     
     healthcheck:
       test: ["CMD", "curl", "-fsS", "--max-time", "2", "http://localhost:6080/vnc.html"]
@@ -123,3 +123,9 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+
+volumes:
+  openclaw-data:
+  openclaw-workspace:
+  browser-config:
+  browser-downloads:
