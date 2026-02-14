@@ -37,10 +37,6 @@ normalize_rel_path() {
     die "PATH_INVALID" "Absolute paths are not allowed"
   fi
 
-  if [[ "$input" == *$'\0'* ]]; then
-    die "PATH_INVALID" "Path contains null byte"
-  fi
-
   if [[ ${#input} -gt 4096 ]]; then
     die "PATH_INVALID" "Path is too long"
   fi
