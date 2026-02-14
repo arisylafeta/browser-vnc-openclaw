@@ -11,6 +11,7 @@ GATEWAY_BIND="${OPENCLAW_GATEWAY_BIND:-lan}"
 GATEWAY_TAILSCALE_MODE="${OPENCLAW_GATEWAY_TAILSCALE_MODE:-serve}"
 GATEWAY_ALLOW_TAILSCALE_AUTH="${OPENCLAW_GATEWAY_ALLOW_TAILSCALE_AUTH:-true}"
 GATEWAY_ALLOW_INSECURE_AUTH="${OPENCLAW_GATEWAY_ALLOW_INSECURE_AUTH:-true}"
+GATEWAY_ALLOWED_ORIGINS="${OPENCLAW_GATEWAY_ALLOWED_ORIGINS:-https://api.easyclaw.ai,http://localhost:3001}"
 
 # Browser configuration
 NOVNC_PORT="${NOVNC_PORT:-6080}"
@@ -59,6 +60,7 @@ echo "   GATEWAY_BIND=$GATEWAY_BIND"
 echo "   GATEWAY_TAILSCALE_MODE=$GATEWAY_TAILSCALE_MODE"
 echo "   GATEWAY_ALLOW_TAILSCALE_AUTH=$GATEWAY_ALLOW_TAILSCALE_AUTH"
 echo "   GATEWAY_ALLOW_INSECURE_AUTH=$GATEWAY_ALLOW_INSECURE_AUTH"
+echo "   GATEWAY_ALLOWED_ORIGINS=$GATEWAY_ALLOWED_ORIGINS"
 echo "   GATEWAY_TOKEN=${GATEWAY_TOKEN:0:10}..."
 echo "   NOVNC_PORT=$NOVNC_PORT"
 
@@ -176,7 +178,19 @@ if [ "$NEED_GENERATE" = true ]; then
     echo '    "mode": "local",' >> "$CONFIG_FILE"
     echo "    \"bind\": \"${GATEWAY_BIND}\"," >> "$CONFIG_FILE"
     echo "    \"tailscale\": { \"mode\": \"${EFFECTIVE_GATEWAY_TAILSCALE_MODE}\" }," >> "$CONFIG_FILE"
-    echo "    \"controlUi\": { \"allowInsecureAuth\": ${GATEWAY_ALLOW_INSECURE_AUTH} }," >> "$CONFIG_FILE"
+    ALLOWED_ORIGINS_JSON=$(printf '%s' "$GATEWAY_ALLOWED_ORIGINS" | awk -F',' '{
+      printf "[";
+      for (i = 1; i <= NF; i++) {
+        gsub(/^ +| +$/, "", $i);
+        if ($i != "") {
+          if (count > 0) printf ",";
+          printf "\"%s\"", $i;
+          count++;
+        }
+      }
+      printf "]";
+    }')
+    echo "    \"controlUi\": { \"allowInsecureAuth\": ${GATEWAY_ALLOW_INSECURE_AUTH}, \"allowedOrigins\": ${ALLOWED_ORIGINS_JSON} }," >> "$CONFIG_FILE"
     echo "    \"auth\": { \"mode\": \"token\", \"token\": \"${GATEWAY_TOKEN}\", \"allowTailscale\": ${GATEWAY_ALLOW_TAILSCALE_AUTH} }" >> "$CONFIG_FILE"
     echo '  },' >> "$CONFIG_FILE"
     echo '  "agents": {' >> "$CONFIG_FILE"
