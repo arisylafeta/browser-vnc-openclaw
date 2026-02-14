@@ -18,14 +18,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set up workspace
 WORKDIR /app
 
-# Install OpenClaw globally
-RUN npm install -g openclaw && \
-    if command -v openclaw >/dev/null 2>&1; then \
-    echo "✅ openclaw installed"; \
-    else \
-    echo "❌ openclaw install failed"; \
-    exit 1; \
-    fi
+# Install OpenClaw globally (with retry for transient registry/network issues)
+RUN set -eux; \
+    npm config set fetch-retries 5; \
+    npm config set fetch-retry-mintimeout 20000; \
+    npm config set fetch-retry-maxtimeout 120000; \
+    npm config set fetch-timeout 300000; \
+    attempt=1; \
+    max_attempts=3; \
+    until npm install -g openclaw --no-progress; do \
+      if [ "$attempt" -ge "$max_attempts" ]; then \
+        echo "❌ openclaw install failed after ${max_attempts} attempts"; \
+        exit 1; \
+      fi; \
+      echo "⚠️ openclaw install attempt ${attempt} failed, retrying..."; \
+      attempt=$((attempt + 1)); \
+      sleep 10; \
+    done; \
+    command -v openclaw >/dev/null 2>&1; \
+    echo "✅ openclaw installed"
 
 # Copy bootstrap script
 COPY scripts/bootstrap.sh /app/scripts/bootstrap.sh
