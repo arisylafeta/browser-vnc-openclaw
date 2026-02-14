@@ -139,6 +139,15 @@ validate_text_file() {
   fi
 }
 
+convert_utf16_to_utf8() {
+  local src="$1"
+  local dst="$2"
+
+  iconv -f UTF-16 -t UTF-8 "$src" > "$dst" 2>/dev/null \
+    || iconv -f UTF-16LE -t UTF-8 "$src" > "$dst" 2>/dev/null \
+    || iconv -f UTF-16BE -t UTF-8 "$src" > "$dst" 2>/dev/null
+}
+
 op_tree() {
   local rel
   rel="$(normalize_rel_path "${1:-}")"
@@ -201,13 +210,30 @@ op_read() {
     die "NOT_FOUND" "File not found"
   fi
 
-  validate_text_file "$target"
+  local read_source="$target"
+  local converted_tmp=""
+
+  if LC_ALL=C grep -qU $'\x00' "$target" 2>/dev/null; then
+    converted_tmp="$(mktemp)"
+    if convert_utf16_to_utf8 "$target" "$converted_tmp"; then
+      read_source="$converted_tmp"
+    else
+      rm -f "$converted_tmp"
+      die "PATH_INVALID" "Binary files are not supported"
+    fi
+  fi
+
+  validate_text_file "$read_source"
 
   local version
   version="$(compute_version "$target")"
 
-  jq -nc --arg path "$rel" --rawfile content "$target" --arg version "$version" \
+  jq -nc --arg path "$rel" --rawfile content "$read_source" --arg version "$version" \
     '{success:true,path:$path,content:$content,encoding:"utf-8",version:$version}'
+
+  if [[ -n "$converted_tmp" ]]; then
+    rm -f "$converted_tmp"
+  fi
 }
 
 op_write() {
