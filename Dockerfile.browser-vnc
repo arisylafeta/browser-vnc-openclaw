@@ -7,8 +7,9 @@ FROM debian:bookworm-slim
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install all required packages (same as official)
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
+RUN set -eux; \
+  apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30; \
+  apt-get install -y --no-install-recommends --fix-missing \
     bash \
     ca-certificates \
     chromium \
@@ -22,8 +23,8 @@ RUN apt-get update \
     socat \
     websockify \
     x11vnc \
-    xvfb \
-  && rm -rf /var/lib/apt/lists/*
+    xvfb; \
+  rm -rf /var/lib/apt/lists/*
 
 # Copy our custom entrypoint with VNC password support
 # Cache bust: 2026-02-11-001
