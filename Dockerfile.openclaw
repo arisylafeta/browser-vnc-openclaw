@@ -29,7 +29,8 @@ RUN npm install -g openclaw && \
 
 # Copy bootstrap script
 COPY scripts/bootstrap.sh /app/scripts/bootstrap.sh
-RUN chmod +x /app/scripts/bootstrap.sh
+COPY scripts/workspace-files.sh /app/scripts/workspace-files.sh
+RUN chmod +x /app/scripts/bootstrap.sh /app/scripts/workspace-files.sh
 
 # Set environment
 ENV HOME=/data \
