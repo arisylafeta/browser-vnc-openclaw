@@ -5,7 +5,8 @@ This template includes `/app/scripts/workspace-files.sh` for safe workspace file
 ## Root and Limits
 
 - Workspace root: `${OPENCLAW_WORKSPACE:-/data/openclaw-workspace}`
-- Max editable file size: `${WORKSPACE_MAX_BYTES:-1048576}` bytes
+- Max text edit size: `${WORKSPACE_MAX_BYTES:-1048576}` bytes
+- Max binary transfer size: `${WORKSPACE_MAX_BINARY_TRANSFER_BYTES:-15728640}` bytes
 - All paths are relative to workspace root
 
 ## Operations
@@ -22,9 +23,15 @@ Example response:
 {"success":true,"parentPath":"notes","entries":[{"path":"notes/todo.md","name":"todo.md","kind":"file","size":42,"modifiedAt":"2026-02-14T12:00:00Z"}]}
 ```
 
+### `stat <path>`
+
+Returns metadata and capabilities for a file or directory.
+
 ### `read <path>`
 
 Reads a UTF-8 text file.
+
+For UTF-16 text files, the script converts to UTF-8 for response.
 
 Example response:
 
@@ -35,6 +42,14 @@ Example response:
 ### `write <path> [expectedVersion]`
 
 Writes file content from stdin. If `expectedVersion` is provided and does not match current file version, returns `VERSION_CONFLICT`.
+
+### `download <path>`
+
+Returns JSON with `contentBase64` plus metadata for binary-safe transfer.
+
+### `upload <path> [expectedVersion]`
+
+Writes binary-safe content from stdin (accepts base64 payload from backend transport). If `expectedVersion` is provided and mismatches, returns `VERSION_CONFLICT`.
 
 Example response:
 
@@ -50,6 +65,18 @@ Creates a directory.
 
 Deletes a file or directory. For non-empty directories, pass `recursive=true`.
 
+### `rename <fromPath> <toPath>`
+
+Renames an item to a new path.
+
+### `move <fromPath> <toPath>`
+
+Moves an item to another path.
+
+### `copy <fromPath> <toPath>`
+
+Copies a file or directory recursively.
+
 ## Error Shape
 
 All errors use:
@@ -58,4 +85,4 @@ All errors use:
 {"success":false,"code":"PATH_INVALID","error":"PATH_INVALID","message":"Path traversal is not allowed"}
 ```
 
-Common codes: `NOT_FOUND`, `PATH_INVALID`, `VERSION_CONFLICT`, `SIZE_EXCEEDED`, `EXECUTION_ERROR`.
+Common codes: `NOT_FOUND`, `PATH_INVALID`, `VERSION_CONFLICT`, `SIZE_EXCEEDED`, `EXECUTION_ERROR`, `IS_DIRECTORY`.

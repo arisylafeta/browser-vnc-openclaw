@@ -4,7 +4,8 @@ set -u
 set -o pipefail
 
 WORKSPACE_ROOT="${OPENCLAW_WORKSPACE:-/data/openclaw-workspace}"
-MAX_BYTES="${WORKSPACE_MAX_BYTES:-1048576}"
+MAX_TEXT_BYTES="${WORKSPACE_MAX_BYTES:-1048576}"
+MAX_BINARY_TRANSFER_BYTES="${WORKSPACE_MAX_BINARY_TRANSFER_BYTES:-15728640}"
 
 mkdir -p "$WORKSPACE_ROOT"
 WORKSPACE_ROOT_REAL="$(realpath -m "$WORKSPACE_ROOT")"
@@ -125,18 +126,91 @@ compute_version() {
   printf '%s:%s' "$((mtime_s * 1000))" "$size"
 }
 
-validate_text_file() {
+get_file_size() {
   local file_path="$1"
+  stat -c %s "$file_path" 2>/dev/null || echo 0
+}
 
-  local size
-  size="$(stat -c %s "$file_path" 2>/dev/null || echo 0)"
-  if (( size > MAX_BYTES )); then
-    die "SIZE_EXCEEDED" "File exceeds maximum size"
+get_modified_at() {
+  local file_path="$1"
+  local mtime_s
+  mtime_s="$(stat -c %Y "$file_path" 2>/dev/null || echo 0)"
+  date -u -d "@$mtime_s" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo ""
+}
+
+get_extension() {
+  local name="$1"
+  if [[ "$name" == *.* ]]; then
+    printf '%s' "${name##*.}" | tr '[:upper:]' '[:lower:]'
+  else
+    printf ''
+  fi
+}
+
+detect_mime_type() {
+  local file_path="$1"
+  local file_name="$2"
+  local ext
+
+  if command -v file >/dev/null 2>&1; then
+    file -b --mime-type "$file_path" 2>/dev/null || true
+    return
   fi
 
-  if LC_ALL=C grep -qU $'\x00' "$file_path" 2>/dev/null; then
-    die "PATH_INVALID" "Binary files are not supported"
-  fi
+  ext="$(get_extension "$file_name")"
+  case "$ext" in
+    md) echo "text/markdown" ;;
+    txt) echo "text/plain" ;;
+    json) echo "application/json" ;;
+    yml|yaml) echo "application/x-yaml" ;;
+    js) echo "application/javascript" ;;
+    ts) echo "application/typescript" ;;
+    tsx|jsx) echo "text/plain" ;;
+    html|htm) echo "text/html" ;;
+    css) echo "text/css" ;;
+    pdf) echo "application/pdf" ;;
+    png) echo "image/png" ;;
+    jpg|jpeg) echo "image/jpeg" ;;
+    gif) echo "image/gif" ;;
+    webp) echo "image/webp" ;;
+    svg) echo "image/svg+xml" ;;
+    mp4) echo "video/mp4" ;;
+    mov) echo "video/quicktime" ;;
+    ppt|pptx) echo "application/vnd.openxmlformats-officedocument.presentationml.presentation" ;;
+    doc|docx) echo "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ;;
+    xls|xlsx) echo "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ;;
+    zip) echo "application/zip" ;;
+    *) echo "application/octet-stream" ;;
+  esac
+}
+
+is_text_mime() {
+  local mime="$1"
+  case "$mime" in
+    text/*|application/json|application/xml|application/javascript|application/typescript|application/x-yaml|application/x-sh)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+is_previewable_mime() {
+  local mime="$1"
+  case "$mime" in
+    text/*|image/*|application/pdf)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+file_contains_null_bytes() {
+  local file_path="$1"
+  LC_ALL=C grep -qU $'\x00' "$file_path" 2>/dev/null
 }
 
 convert_utf16_to_utf8() {
@@ -146,6 +220,98 @@ convert_utf16_to_utf8() {
   iconv -f UTF-16 -t UTF-8 "$src" > "$dst" 2>/dev/null \
     || iconv -f UTF-16LE -t UTF-8 "$src" > "$dst" 2>/dev/null \
     || iconv -f UTF-16BE -t UTF-8 "$src" > "$dst" 2>/dev/null
+}
+
+validate_text_size() {
+  local file_path="$1"
+  local size
+  size="$(get_file_size "$file_path")"
+  if (( size > MAX_TEXT_BYTES )); then
+    die "SIZE_EXCEEDED" "File exceeds text size limit"
+  fi
+}
+
+validate_binary_transfer_size() {
+  local file_path="$1"
+  local size
+  size="$(get_file_size "$file_path")"
+  if (( size > MAX_BINARY_TRANSFER_BYTES )); then
+    die "SIZE_EXCEEDED" "File exceeds transfer size limit"
+  fi
+}
+
+entry_json() {
+  local rel_path="$1"
+  local abs_path="$2"
+  local base_name kind modified size ext mime is_text can_edit can_preview can_download
+
+  base_name="$(basename "$abs_path")"
+  modified="$(get_modified_at "$abs_path")"
+
+  if [[ -d "$abs_path" ]]; then
+    kind="directory"
+    size=0
+    ext=""
+    mime="inode/directory"
+    is_text="false"
+    can_edit="false"
+    can_preview="false"
+    can_download="false"
+  else
+    kind="file"
+    size="$(get_file_size "$abs_path")"
+    ext="$(get_extension "$base_name")"
+    mime="$(detect_mime_type "$abs_path" "$base_name")"
+    if [[ -z "$mime" ]]; then
+      mime="application/octet-stream"
+    fi
+
+    if is_text_mime "$mime"; then
+      is_text="true"
+      can_edit="true"
+    else
+      is_text="false"
+      can_edit="false"
+    fi
+
+    if is_previewable_mime "$mime"; then
+      can_preview="true"
+    else
+      can_preview="false"
+    fi
+
+    can_download="true"
+  fi
+
+  jq -nc \
+    --arg path "$rel_path" \
+    --arg name "$base_name" \
+    --arg kind "$kind" \
+    --arg modified "$modified" \
+    --arg ext "$ext" \
+    --arg mime "$mime" \
+    --argjson size "$size" \
+    --argjson isText "$is_text" \
+    --argjson canRead true \
+    --argjson canEdit "$can_edit" \
+    --argjson canPreview "$can_preview" \
+    --argjson canDownload "$can_download" \
+    '{
+      path:$path,
+      name:$name,
+      kind:$kind,
+      size:(if $kind == "file" then $size else null end),
+      modifiedAt:(if $modified == "" then null else $modified end),
+      extension:(if $ext == "" then null else $ext end),
+      mimeType:$mime,
+      isText:(if $kind == "file" then $isText else null end),
+      capabilities:{
+        canRead:$canRead,
+        canEdit:$canEdit,
+        canPreview:$canPreview,
+        canDownload:$canDownload
+      }
+    } | del(..|nulls)'
 }
 
 op_tree() {
@@ -161,26 +327,13 @@ op_tree() {
   local entries
   entries="$({
     find "$target" -mindepth 1 -maxdepth 1 -print0 2>/dev/null | while IFS= read -r -d '' item; do
-      local name path kind size modified mtime_s
+      local name child_rel
       name="$(basename "$item")"
-      path="$name"
+      child_rel="$name"
       if [[ -n "$rel" ]]; then
-        path="$rel/$name"
+        child_rel="$rel/$name"
       fi
-
-      mtime_s="$(stat -c %Y "$item" 2>/dev/null || echo 0)"
-      modified="$(date -u -d "@$mtime_s" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")"
-
-      if [[ -d "$item" ]]; then
-        kind="directory"
-        jq -nc --arg path "$path" --arg name "$name" --arg kind "$kind" --arg modified "$modified" \
-          '{path:$path,name:$name,kind:$kind} + (if $modified == "" then {} else {modifiedAt:$modified} end)'
-      else
-        kind="file"
-        size="$(stat -c %s "$item" 2>/dev/null || echo 0)"
-        jq -nc --arg path "$path" --arg name "$name" --arg kind "$kind" --arg modified "$modified" --argjson size "$size" \
-          '{path:$path,name:$name,kind:$kind,size:$size} + (if $modified == "" then {} else {modifiedAt:$modified} end)'
-      fi
+      entry_json "$child_rel" "$item"
     done
   } | jq -sc '.')"
 
@@ -190,6 +343,27 @@ op_tree() {
 
   jq -nc --arg parentPath "$rel" --argjson entries "$entries" \
     '{success:true,parentPath:$parentPath,entries:$entries}'
+}
+
+op_stat() {
+  local rel
+  rel="$(normalize_rel_path "${1:-}")"
+  if [[ -z "$rel" ]]; then
+    die "PATH_INVALID" "Path is required"
+  fi
+
+  local target
+  target="$(resolve_existing_path "$rel")"
+
+  local entry
+  entry="$(entry_json "$rel" "$target")"
+
+  if [[ -f "$target" ]]; then
+    jq -nc --argjson entry "$entry" --arg version "$(compute_version "$target")" \
+      '{success:true,entry:$entry,version:$version}'
+  else
+    jq -nc --argjson entry "$entry" '{success:true,entry:$entry}'
+  fi
 }
 
 op_read() {
@@ -210,30 +384,76 @@ op_read() {
     die "NOT_FOUND" "File not found"
   fi
 
+  local mime
+  mime="$(detect_mime_type "$target" "$(basename "$target")")"
+  if ! is_text_mime "$mime"; then
+    die "PATH_INVALID" "Binary files are not supported in text read"
+  fi
+
   local read_source="$target"
   local converted_tmp=""
 
-  if LC_ALL=C grep -qU $'\x00' "$target" 2>/dev/null; then
+  if file_contains_null_bytes "$target"; then
     converted_tmp="$(mktemp)"
     if convert_utf16_to_utf8 "$target" "$converted_tmp"; then
       read_source="$converted_tmp"
     else
       rm -f "$converted_tmp"
-      die "PATH_INVALID" "Binary files are not supported"
+      die "PATH_INVALID" "Binary files are not supported in text read"
     fi
   fi
 
-  validate_text_file "$read_source"
+  validate_text_size "$read_source"
 
   local version
   version="$(compute_version "$target")"
 
-  jq -nc --arg path "$rel" --rawfile content "$read_source" --arg version "$version" \
+  jq -nc \
+    --arg path "$rel" \
+    --rawfile content "$read_source" \
+    --arg version "$version" \
     '{success:true,path:$path,content:$content,encoding:"utf-8",version:$version}'
 
   if [[ -n "$converted_tmp" ]]; then
     rm -f "$converted_tmp"
   fi
+}
+
+op_download() {
+  local rel
+  rel="$(normalize_rel_path "${1:-}")"
+  if [[ -z "$rel" ]]; then
+    die "PATH_INVALID" "File path is required"
+  fi
+
+  local target
+  target="$(resolve_existing_path "$rel")"
+
+  if [[ -d "$target" ]]; then
+    die "IS_DIRECTORY" "Cannot download a directory"
+  fi
+
+  if [[ ! -f "$target" ]]; then
+    die "NOT_FOUND" "File not found"
+  fi
+
+  validate_binary_transfer_size "$target"
+
+  local file_name mime size version content_b64
+  file_name="$(basename "$target")"
+  mime="$(detect_mime_type "$target" "$file_name")"
+  size="$(get_file_size "$target")"
+  version="$(compute_version "$target")"
+  content_b64="$(base64 -w 0 "$target" 2>/dev/null || base64 "$target" | tr -d '\n')"
+
+  jq -nc \
+    --arg path "$rel" \
+    --arg fileName "$file_name" \
+    --arg mimeType "$mime" \
+    --arg version "$version" \
+    --arg contentBase64 "$content_b64" \
+    --argjson size "$size" \
+    '{success:true,path:$path,fileName:$fileName,mimeType:$mimeType,size:$size,version:$version,contentBase64:$contentBase64}'
 }
 
 op_write() {
@@ -261,7 +481,11 @@ op_write() {
   trap 'rm -f "$tmp_file"' EXIT
 
   cat > "$tmp_file"
-  validate_text_file "$tmp_file"
+  validate_text_size "$tmp_file"
+
+  if file_contains_null_bytes "$tmp_file"; then
+    die "PATH_INVALID" "Binary files are not supported in text write"
+  fi
 
   if [[ -n "$expected_version" ]]; then
     if [[ ! -f "$target" ]]; then
@@ -280,11 +504,74 @@ op_write() {
   fi
   trap - EXIT
 
-  local version
+  jq -nc --arg path "$rel" --arg version "$(compute_version "$target")" \
+    '{success:true,path:$path,version:$version}'
+}
+
+op_upload() {
+  local rel expected_version
+  rel="$(normalize_rel_path "${1:-}")"
+  expected_version="${2:-}"
+
+  if [[ -z "$rel" ]]; then
+    die "PATH_INVALID" "File path is required"
+  fi
+
+  local target
+  target="$(resolve_target_for_write "$rel")"
+
+  if [[ -d "$target" ]]; then
+    die "IS_DIRECTORY" "Cannot upload to a directory path"
+  fi
+
+  if [[ -L "$target" ]]; then
+    die "PATH_INVALID" "Refusing to write through symlink"
+  fi
+
+  if [[ -n "$expected_version" ]]; then
+    if [[ ! -f "$target" ]]; then
+      die "VERSION_CONFLICT" "File does not exist for expected version"
+    fi
+
+    local current_version
+    current_version="$(compute_version "$target")"
+    if [[ "$current_version" != "$expected_version" ]]; then
+      die "VERSION_CONFLICT" "File was modified by another process"
+    fi
+  fi
+
+  local tmp_input tmp_file
+  tmp_input="$(mktemp)"
+  tmp_file="$(mktemp)"
+  trap 'rm -f "$tmp_input" "$tmp_file"' EXIT
+
+  cat > "$tmp_input"
+
+  if base64 -d "$tmp_input" > "$tmp_file" 2>/dev/null; then
+    :
+  else
+    cp "$tmp_input" "$tmp_file"
+  fi
+
+  validate_binary_transfer_size "$tmp_file"
+
+  if ! mv "$tmp_file" "$target"; then
+    die "EXECUTION_ERROR" "Failed to persist file"
+  fi
+  trap - EXIT
+
+  local file_name mime size version
+  file_name="$(basename "$target")"
+  mime="$(detect_mime_type "$target" "$file_name")"
+  size="$(get_file_size "$target")"
   version="$(compute_version "$target")"
 
-  jq -nc --arg path "$rel" --arg version "$version" \
-    '{success:true,path:$path,version:$version}'
+  jq -nc \
+    --arg path "$rel" \
+    --arg version "$version" \
+    --arg mimeType "$mime" \
+    --argjson size "$size" \
+    '{success:true,path:$path,version:$version,mimeType:$mimeType,size:$size}'
 }
 
 op_mkdir() {
@@ -337,6 +624,57 @@ op_delete() {
   jq -nc --arg path "$rel" '{success:true,path:$path}'
 }
 
+op_rename() {
+  local from_rel to_rel
+  from_rel="$(normalize_rel_path "${1:-}")"
+  to_rel="$(normalize_rel_path "${2:-}")"
+
+  if [[ -z "$from_rel" || -z "$to_rel" ]]; then
+    die "PATH_INVALID" "Both source and destination paths are required"
+  fi
+
+  local from_target to_target
+  from_target="$(resolve_existing_path "$from_rel")"
+  to_target="$(resolve_target_for_write "$to_rel")"
+
+  if [[ -e "$to_target" ]]; then
+    die "PATH_INVALID" "Destination already exists"
+  fi
+
+  mv "$from_target" "$to_target" || die "EXECUTION_ERROR" "Failed to rename item"
+  jq -nc --arg from "$from_rel" --arg to "$to_rel" '{success:true,fromPath:$from,toPath:$to}'
+}
+
+op_move() {
+  op_rename "${1:-}" "${2:-}"
+}
+
+op_copy() {
+  local from_rel to_rel
+  from_rel="$(normalize_rel_path "${1:-}")"
+  to_rel="$(normalize_rel_path "${2:-}")"
+
+  if [[ -z "$from_rel" || -z "$to_rel" ]]; then
+    die "PATH_INVALID" "Both source and destination paths are required"
+  fi
+
+  local from_target to_target
+  from_target="$(resolve_existing_path "$from_rel")"
+  to_target="$(resolve_target_for_write "$to_rel")"
+
+  if [[ -e "$to_target" ]]; then
+    die "PATH_INVALID" "Destination already exists"
+  fi
+
+  if [[ -d "$from_target" ]]; then
+    cp -R "$from_target" "$to_target" || die "EXECUTION_ERROR" "Failed to copy directory"
+  else
+    cp "$from_target" "$to_target" || die "EXECUTION_ERROR" "Failed to copy file"
+  fi
+
+  jq -nc --arg from "$from_rel" --arg to "$to_rel" '{success:true,fromPath:$from,toPath:$to}'
+}
+
 main() {
   local op="${1:-}"
 
@@ -344,17 +682,35 @@ main() {
     tree)
       op_tree "${2:-}"
       ;;
+    stat)
+      op_stat "${2:-}"
+      ;;
     read)
       op_read "${2:-}"
       ;;
+    download)
+      op_download "${2:-}"
+      ;;
     write)
       op_write "${2:-}" "${3:-}"
+      ;;
+    upload)
+      op_upload "${2:-}" "${3:-}"
       ;;
     mkdir)
       op_mkdir "${2:-}"
       ;;
     delete)
       op_delete "${2:-}" "${3:-false}"
+      ;;
+    rename)
+      op_rename "${2:-}" "${3:-}"
+      ;;
+    move)
+      op_move "${2:-}" "${3:-}"
+      ;;
+    copy)
+      op_copy "${2:-}" "${3:-}"
       ;;
     *)
       die "PATH_INVALID" "Unknown operation"
