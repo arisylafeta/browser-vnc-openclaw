@@ -8,6 +8,9 @@ WORKSPACE_DIR="${OPENCLAW_WORKSPACE:-/data/openclaw-workspace}"
 GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
 GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
 GATEWAY_BIND="${OPENCLAW_GATEWAY_BIND:-lan}"
+GATEWAY_TAILSCALE_MODE="${OPENCLAW_GATEWAY_TAILSCALE_MODE:-serve}"
+GATEWAY_ALLOW_TAILSCALE_AUTH="${OPENCLAW_GATEWAY_ALLOW_TAILSCALE_AUTH:-true}"
+GATEWAY_ALLOW_INSECURE_AUTH="${OPENCLAW_GATEWAY_ALLOW_INSECURE_AUTH:-true}"
 
 # Browser configuration
 NOVNC_PORT="${NOVNC_PORT:-6080}"
@@ -53,6 +56,9 @@ echo "   CDP_URL=$CDP_URL"
 echo "   CONFIG_FILE=$CONFIG_FILE"
 echo "   GATEWAY_PORT=$GATEWAY_PORT"
 echo "   GATEWAY_BIND=$GATEWAY_BIND"
+echo "   GATEWAY_TAILSCALE_MODE=$GATEWAY_TAILSCALE_MODE"
+echo "   GATEWAY_ALLOW_TAILSCALE_AUTH=$GATEWAY_ALLOW_TAILSCALE_AUTH"
+echo "   GATEWAY_ALLOW_INSECURE_AUTH=$GATEWAY_ALLOW_INSECURE_AUTH"
 echo "   GATEWAY_TOKEN=${GATEWAY_TOKEN:0:10}..."
 echo "   NOVNC_PORT=$NOVNC_PORT"
 
@@ -74,6 +80,23 @@ done
 if [ -z "$GATEWAY_TOKEN" ]; then
     echo "⚠️  No OPENCLAW_GATEWAY_TOKEN provided, generating new token..."
     GATEWAY_TOKEN=$(openssl rand -hex 24 2>/dev/null || node -e "console.log(require('crypto').randomBytes(24).toString('hex'))")
+fi
+
+# Resolve effective Tailscale mode with runtime guardrails.
+EFFECTIVE_GATEWAY_TAILSCALE_MODE="$GATEWAY_TAILSCALE_MODE"
+if [ "$GATEWAY_TAILSCALE_MODE" = "serve" ] || [ "$GATEWAY_TAILSCALE_MODE" = "funnel" ]; then
+    if ! command -v tailscale >/dev/null 2>&1; then
+        echo "⚠️  tailscale CLI not found in container; falling back to gateway.tailscale.mode=off"
+        EFFECTIVE_GATEWAY_TAILSCALE_MODE="off"
+    elif ! tailscale status >/dev/null 2>&1; then
+        echo "⚠️  tailscaled is not reachable; falling back to gateway.tailscale.mode=off"
+        EFFECTIVE_GATEWAY_TAILSCALE_MODE="off"
+    fi
+fi
+
+if [ "$EFFECTIVE_GATEWAY_TAILSCALE_MODE" != "off" ] && [ "$GATEWAY_BIND" != "loopback" ]; then
+    echo "ℹ️  For tailscale mode '$EFFECTIVE_GATEWAY_TAILSCALE_MODE', forcing gateway bind to loopback"
+    GATEWAY_BIND="loopback"
 fi
 
 # Validate that at least one AI provider key is set
@@ -152,7 +175,9 @@ if [ "$NEED_GENERATE" = true ]; then
     echo "    \"port\": $GATEWAY_PORT," >> "$CONFIG_FILE"
     echo '    "mode": "local",' >> "$CONFIG_FILE"
     echo "    \"bind\": \"${GATEWAY_BIND}\"," >> "$CONFIG_FILE"
-    echo "    \"auth\": { \"mode\": \"token\", \"token\": \"${GATEWAY_TOKEN}\" }" >> "$CONFIG_FILE"
+    echo "    \"tailscale\": { \"mode\": \"${EFFECTIVE_GATEWAY_TAILSCALE_MODE}\" }," >> "$CONFIG_FILE"
+    echo "    \"controlUi\": { \"allowInsecureAuth\": ${GATEWAY_ALLOW_INSECURE_AUTH} }," >> "$CONFIG_FILE"
+    echo "    \"auth\": { \"mode\": \"token\", \"token\": \"${GATEWAY_TOKEN}\", \"allowTailscale\": ${GATEWAY_ALLOW_TAILSCALE_AUTH} }" >> "$CONFIG_FILE"
     echo '  },' >> "$CONFIG_FILE"
     echo '  "agents": {' >> "$CONFIG_FILE"
     echo '    "defaults": {' >> "$CONFIG_FILE"
