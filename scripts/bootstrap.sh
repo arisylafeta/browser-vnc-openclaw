@@ -219,6 +219,7 @@ if [ "$NEED_GENERATE" = true ]; then
         echo '        "api": "openai-completions",' >> "$CONFIG_FILE"
         echo "        \"apiKey\": \"${ROUTER_API_KEY}\"," >> "$CONFIG_FILE"
         echo '        "headers": {' >> "$CONFIG_FILE"
+        echo "          \"x-internal-token\": \"${ROUTER_API_KEY}\"," >> "$CONFIG_FILE"
         echo "          \"x-easyclaw-user-id\": \"${ROUTER_USER_ID}\"," >> "$CONFIG_FILE"
         echo "          \"x-easyclaw-application-id\": \"${ROUTER_APPLICATION_ID}\"," >> "$CONFIG_FILE"
         echo "          \"x-easyclaw-provider-model-id\": \"${ROUTER_PROVIDER_MODEL_ID}\"" >> "$CONFIG_FILE"
