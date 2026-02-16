@@ -14,12 +14,13 @@ GATEWAY_ALLOW_INSECURE_AUTH="${OPENCLAW_GATEWAY_ALLOW_INSECURE_AUTH:-true}"
 GATEWAY_ALLOWED_ORIGINS="${OPENCLAW_GATEWAY_ALLOWED_ORIGINS:-https://api.easyclaw.ai,http://localhost:3001}"
 ROUTING_MODE="${OPENCLAW_MODEL_ROUTING_MODE:-byo}"
 ROUTER_BASE_URL="${EASYCLAW_MODEL_ROUTER_BASE_URL:-}"
-ROUTER_API_KEY="${EASYCLAW_MODEL_ROUTER_API_KEY:-}"
+ROUTER_TOKEN="${EASYCLAW_MODEL_ROUTER_TOKEN:-}"
 ROUTER_PROVIDER_ID="${EASYCLAW_ROUTER_PROVIDER_ID:-easyclaw-router}"
 ROUTER_MODEL_ID="${EASYCLAW_ROUTER_MODEL_ID:-gpt-5.2}"
 ROUTER_USER_ID="${EASYCLAW_BILLING_USER_ID:-}"
 ROUTER_APPLICATION_ID="${EASYCLAW_BILLING_APPLICATION_ID:-}"
 ROUTER_PROVIDER_MODEL_ID="${EASYCLAW_PROVIDER_MODEL_ID:-}"
+ROUTER_PROVIDER_TYPE="${EASYCLAW_PROVIDER_TYPE:-openai}"
 
 # Browser configuration
 NOVNC_PORT="${NOVNC_PORT:-6080}"
@@ -111,8 +112,8 @@ fi
 
 # Validate that at least one AI provider key is set
 if [ "$ROUTING_MODE" = "platform" ]; then
-    if [ -z "$ROUTER_BASE_URL" ] || [ -z "$ROUTER_API_KEY" ]; then
-        echo "❌ platform routing mode requires EASYCLAW_MODEL_ROUTER_BASE_URL and EASYCLAW_MODEL_ROUTER_API_KEY"
+    if [ -z "$ROUTER_BASE_URL" ] || [ -z "$ROUTER_TOKEN" ]; then
+        echo "❌ platform routing mode requires EASYCLAW_MODEL_ROUTER_BASE_URL and EASYCLAW_MODEL_ROUTER_TOKEN"
         exit 1
     fi
 else
@@ -217,9 +218,11 @@ if [ "$NEED_GENERATE" = true ]; then
         echo "      \"${ROUTER_PROVIDER_ID}\": {" >> "$CONFIG_FILE"
         echo "        \"baseUrl\": \"${ROUTER_BASE_URL}\"," >> "$CONFIG_FILE"
         echo '        "api": "openai-completions",' >> "$CONFIG_FILE"
-        echo "        \"apiKey\": \"${ROUTER_API_KEY}\"," >> "$CONFIG_FILE"
+        echo "        \"apiKey\": \"${ROUTER_TOKEN}\"," >> "$CONFIG_FILE"
+        # Identity/auth comes from bearer token; x-easyclaw-* headers are observability metadata only.
         echo '        "headers": {' >> "$CONFIG_FILE"
-        echo "          \"x-internal-token\": \"${ROUTER_API_KEY}\"," >> "$CONFIG_FILE"
+        echo "          \"authorization\": \"Bearer ${ROUTER_TOKEN}\"," >> "$CONFIG_FILE"
+        echo "          \"x-easyclaw-provider-type\": \"${ROUTER_PROVIDER_TYPE}\"," >> "$CONFIG_FILE"
         echo "          \"x-easyclaw-user-id\": \"${ROUTER_USER_ID}\"," >> "$CONFIG_FILE"
         echo "          \"x-easyclaw-application-id\": \"${ROUTER_APPLICATION_ID}\"," >> "$CONFIG_FILE"
         echo "          \"x-easyclaw-provider-model-id\": \"${ROUTER_PROVIDER_MODEL_ID}\"" >> "$CONFIG_FILE"
